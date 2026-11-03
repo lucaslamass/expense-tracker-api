@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
@@ -15,6 +17,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -170,5 +173,127 @@ class ExpensetrackerApplicationTests {
 				.withBasicAuth("lucas", "abc123")
 				.getForEntity("/expenses/102", String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+	}
+
+	@Test
+	@DirtiesContext
+	void shouldUpdateAnExistingExpense() {
+		Expense expenseUpdate = new Expense(null, "Compra supermercado grande",
+				new BigDecimal("60.00"), LocalDate.of(2026, 11, 3), "Comida", null);
+		HttpEntity<Expense> request = new HttpEntity<>(expenseUpdate);
+
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.exchange("/expenses/99", HttpMethod.PUT, request, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+		ResponseEntity<String> getResponse = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses/99", String.class);
+		assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+		DocumentContext documentContext = JsonPath.parse(getResponse.getBody());
+		Number id = documentContext.read("$.id");
+		String description = documentContext.read("$.description");
+		Double amount = documentContext.read("$.amount");
+		assertThat(id).isEqualTo(99);
+		assertThat(description).isEqualTo("Compra supermercado grande");
+		assertThat(amount).isEqualTo(60.00);
+	}
+
+	@Test
+	void shouldNotUpdateAnExpenseThatDoesNotExist() {
+		Expense unknownExpense = new Expense(null, "No existe",
+				new BigDecimal("10.00"), LocalDate.of(2026, 11, 3), "Comida", null);
+		HttpEntity<Expense> request = new HttpEntity<>(unknownExpense);
+
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.exchange("/expenses/99999", HttpMethod.PUT, request, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+	}
+
+	@Test
+	void shouldNotUpdateAnExpenseThatIsOwnedBySomeoneElse() {
+		Expense anaExpense = new Expense(null, "Gasolina",
+				new BigDecimal("1.00"), LocalDate.of(2026, 11, 2), "Transporte", null);
+		HttpEntity<Expense> request = new HttpEntity<>(anaExpense);
+
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.exchange("/expenses/102", HttpMethod.PUT, request, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+	}
+
+	@Test
+	@DirtiesContext
+	void shouldDeleteAnExistingExpense() {
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.exchange("/expenses/99", HttpMethod.DELETE, null, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+		ResponseEntity<String> getResponse = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses/99", String.class);
+		assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+	}
+
+	@Test
+	void shouldNotDeleteAnExpenseThatDoesNotExist() {
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.exchange("/expenses/99999", HttpMethod.DELETE, null, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+	}
+
+	@Test
+	void shouldNotAllowDeletionOfExpensesTheyDoNotOwn() {
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.exchange("/expenses/102", HttpMethod.DELETE, null, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+		// El gasto de ana sigue existiendo
+		ResponseEntity<String> getResponse = restTemplate
+				.withBasicAuth("ana", "xyz789")
+				.getForEntity("/expenses/102", String.class);
+		assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+	}
+
+	@Test
+	void shouldRejectAnExpenseWithInvalidData() {
+		Expense invalidExpense = new Expense(null, "",
+				new BigDecimal("-5.00"), LocalDate.of(2026, 11, 4), "Comida", null);
+
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.postForEntity("/expenses", invalidExpense, String.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+		DocumentContext documentContext = JsonPath.parse(response.getBody());
+		String descriptionError = documentContext.read("$.errors.description");
+		String amountError = documentContext.read("$.errors.amount");
+		assertThat(descriptionError).isNotBlank();
+		assertThat(amountError).isNotBlank();
+	}
+
+	@Test
+	void shouldReturnASummaryOfTheUsersExpenses() {
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses/summary", String.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+		DocumentContext documentContext = JsonPath.parse(response.getBody());
+		double total = documentContext.read("$.total");
+		assertThat(total).isEqualTo(207.30);
+
+		double food = documentContext.read("$.byCategory.Comida");
+		assertThat(food).isEqualTo(45.30);
+
+		// La gasolina es de ana: no debe aparecer en el resumen de lucas
+		Map<String, Object> byCategory = documentContext.read("$.byCategory");
+		assertThat(byCategory).hasSize(3).doesNotContainKey("Transporte");
 	}
 }
