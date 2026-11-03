@@ -23,6 +23,8 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-resttestclient'
 	testImplementation 'org.springframework.boot:spring-boot-restclient'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
+	runtimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {

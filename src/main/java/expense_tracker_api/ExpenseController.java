@@ -1,7 +1,6 @@
 package expense_tracker_api;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.util.Optional;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,12 +12,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/expenses")
 public class ExpenseController {
 
+    private final ExpenseRepository expenseRepository;
+
+    public ExpenseController(ExpenseRepository expenseRepository) {
+        this.expenseRepository = expenseRepository;
+    }
+
     @GetMapping("/{requestedId}")
     public ResponseEntity<Expense> findById(@PathVariable Long requestedId) {
-        if (requestedId.equals(99L)) {
-            Expense expense = new Expense(99L, "Compra supermercado",
-                    new BigDecimal("45.30"), LocalDate.of(2026, 11, 3), "Comida");
-            return ResponseEntity.ok(expense);
+        Optional<Expense> expenseOptional = expenseRepository.findById(requestedId);
+        if (expenseOptional.isPresent()) {
+            return ResponseEntity.ok(expenseOptional.get());
         }
         return ResponseEntity.notFound().build();
     }
