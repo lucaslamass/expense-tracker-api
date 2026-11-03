@@ -1,7 +1,13 @@
 package expense_tracker_api;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +35,17 @@ public class ExpenseController {
             return ResponseEntity.ok(expenseOptional.get());
         }
         return ResponseEntity.notFound().build();
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Expense>> findAll(Pageable pageable) {
+        Page<Expense> page = expenseRepository.findAll(
+                PageRequest.of(
+                        pageable.getPageNumber(),
+                        pageable.getPageSize(),
+                        pageable.getSortOr(Sort.by(Sort.Direction.DESC, "date"))
+                ));
+        return ResponseEntity.ok(page.getContent());
     }
 
     @PostMapping
