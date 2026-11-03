@@ -20,7 +20,7 @@ class ExpenseJsonTest {
     @Test
     void expenseSerializationTest() throws IOException {
         Expense expense = new Expense(99L, "Compra supermercado",
-                new BigDecimal("45.30"), LocalDate.of(2026, 11, 3), "Comida");
+                new BigDecimal("45.30"), LocalDate.of(2026, 11, 3), "Comida", "lucas");
 
         assertThat(json.write(expense)).isStrictlyEqualToJson("single.json");
         assertThat(json.write(expense)).extractingJsonPathNumberValue("@.id").isEqualTo(99);
@@ -36,11 +36,12 @@ class ExpenseJsonTest {
                   "description": "Compra supermercado",
                   "amount": 45.30,
                   "date": "2026-11-03",
-                  "category": "Comida"
+                  "category": "Comida",
+                  "owner": "lucas"
                 }
                 """;
         Expense expected = new Expense(99L, "Compra supermercado",
-                new BigDecimal("45.30"), LocalDate.of(2026, 11, 3), "Comida");
+                new BigDecimal("45.30"), LocalDate.of(2026, 11, 3), "Comida", "lucas");
 
         assertThat(json.parse(jsonText)).isEqualTo(expected);
         assertThat(json.parseObject(jsonText).description()).isEqualTo("Compra supermercado");

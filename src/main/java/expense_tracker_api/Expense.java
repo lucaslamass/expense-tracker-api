@@ -6,5 +6,5 @@ import java.time.LocalDate;
 import org.springframework.data.annotation.Id;
 
 public record Expense(@Id Long id, String description, BigDecimal amount,
-                      LocalDate date, String category) {
+                      LocalDate date, String category, String owner) {
 }

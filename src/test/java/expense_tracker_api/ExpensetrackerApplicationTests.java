@@ -27,7 +27,9 @@ class ExpensetrackerApplicationTests {
 
 	@Test
 	void shouldReturnAnExpenseWhenDataIsSaved() {
-		ResponseEntity<String> response = restTemplate.getForEntity("/expenses/99", String.class);
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses/99", String.class);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -41,7 +43,9 @@ class ExpensetrackerApplicationTests {
 
 	@Test
 	void shouldNotReturnAnExpenseWithAnUnknownId() {
-		ResponseEntity<String> response = restTemplate.getForEntity("/expenses/1000", String.class);
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses/1000", String.class);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 		assertThat(response.getBody()).isBlank();
@@ -51,13 +55,17 @@ class ExpensetrackerApplicationTests {
 	@DirtiesContext
 	void shouldCreateANewExpense() {
 		Expense newExpense = new Expense(null, "Billete de bus",
-				new BigDecimal("1.50"), LocalDate.of(2026, 11, 4), "Transporte");
+				new BigDecimal("1.50"), LocalDate.of(2026, 11, 4), "Transporte", null);
 
-		ResponseEntity<Void> createResponse = restTemplate.postForEntity("/expenses", newExpense, Void.class);
+		ResponseEntity<Void> createResponse = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.postForEntity("/expenses", newExpense, Void.class);
 		assertThat(createResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
 		URI locationOfNewExpense = createResponse.getHeaders().getLocation();
-		ResponseEntity<String> getResponse = restTemplate.getForEntity(locationOfNewExpense, String.class);
+		ResponseEntity<String> getResponse = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity(locationOfNewExpense, String.class);
 		assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
 
 		DocumentContext documentContext = JsonPath.parse(getResponse.getBody());
@@ -68,11 +76,16 @@ class ExpensetrackerApplicationTests {
 		assertThat(id).isNotNull();
 		assertThat(description).isEqualTo("Billete de bus");
 		assertThat(amount).isEqualTo(1.50);
+
+		String owner = documentContext.read("$.owner");
+		assertThat(owner).isEqualTo("lucas");
 	}
 
 	@Test
 	void shouldReturnAllExpensesWhenListIsRequested() {
-		ResponseEntity<String> response = restTemplate.getForEntity("/expenses", String.class);
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses", String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
 		DocumentContext documentContext = JsonPath.parse(response.getBody());
@@ -88,7 +101,9 @@ class ExpensetrackerApplicationTests {
 
 	@Test
 	void shouldReturnAPageOfExpenses() {
-		ResponseEntity<String> response = restTemplate.getForEntity("/expenses?page=0&size=1", String.class);
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses?page=0&size=1", String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
 		DocumentContext documentContext = JsonPath.parse(response.getBody());
@@ -98,7 +113,9 @@ class ExpensetrackerApplicationTests {
 
 	@Test
 	void shouldReturnASortedPageOfExpenses() {
-		ResponseEntity<String> response = restTemplate.getForEntity("/expenses?page=0&size=1&sort=amount,desc", String.class);
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses?page=0&size=1&sort=amount,desc", String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
 		DocumentContext documentContext = JsonPath.parse(response.getBody());
@@ -111,7 +128,9 @@ class ExpensetrackerApplicationTests {
 
 	@Test
 	void shouldReturnASortedPageOfExpensesWithNoParametersAndUseDefaultValues() {
-		ResponseEntity<String> response = restTemplate.getForEntity("/expenses", String.class);
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses", String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
 		DocumentContext documentContext = JsonPath.parse(response.getBody());
@@ -121,5 +140,35 @@ class ExpensetrackerApplicationTests {
 		// Por defecto: del gasto más reciente al más antiguo
 		JSONArray ids = documentContext.read("$..id");
 		assertThat(ids).containsExactly(99, 100, 101);
+	}
+
+	@Test
+	void shouldNotReturnAnExpenseWhenUsingBadCredentials() {
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("BAD-USER", "abc123")
+				.getForEntity("/expenses/99", String.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+		response = restTemplate
+				.withBasicAuth("lucas", "BAD-PASSWORD")
+				.getForEntity("/expenses/99", String.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+	}
+
+	@Test
+	void shouldRejectUsersWhoAreNotExpenseOwners() {
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("noowner", "qrs456")
+				.getForEntity("/expenses/99", String.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+	}
+
+	@Test
+	void shouldNotAllowAccessToExpensesTheyDoNotOwn() {
+		// El gasto 102 es de "ana": lucas no debe poder verlo
+		ResponseEntity<String> response = restTemplate
+				.withBasicAuth("lucas", "abc123")
+				.getForEntity("/expenses/102", String.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 	}
 }
