@@ -109,6 +109,14 @@ curl -u lucas:abc123 "http://localhost:8080/expenses?sort=amount,desc"
 curl -u lucas:abc123 http://localhost:8080/expenses/summary
 ```
 
+### Manual smoke test
+
+With the application running, this script exercises every endpoint end to end (Windows PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-test.ps1
+```
+
 ## Project structure
 
 ```
